@@ -237,6 +237,40 @@ struct VersionFile: Codable {
 	}
 }
 
+/// Creates a version file for the current project in the
+/// Carthage/Build directory which associates its commitish with
+/// the hashes (e.g. SHA256) of the built frameworks for each platform
+/// in order to allow those frameworks to be skipped in future builds.
+///
+/// Assumes the last path component of the root directory is the name of the
+/// current project. Eg. /tmp/code/Alamofire
+///
+/// Returns a signal that succeeds once the file has been created.
+public func createVersionFileForCurrentProject(
+	platforms: Set<Platform>,
+	buildProducts: [URL],
+	rootDirectoryURL: URL
+) -> SignalProducer<(), CarthageError> {
+	let currentGitTagOrCommitish = launchGitTask(["rev-parse", "HEAD"])
+		.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+		.flatMap(.merge) { headCommitish in
+			return launchGitTask(["describe", "--exact-match", headCommitish])
+				.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+				.flatMapError { _  in SignalProducer(value: headCommitish) }
+		}
+
+	let dependecyName = !rootDirectoryURL.lastPathComponent.isEmpty ? rootDirectoryURL.lastPathComponent : "Current-Unknown"
+	return currentGitTagOrCommitish
+		.flatMap(.merge) { createVersionFileForCommitish(
+			$0,
+			dependencyName: dependecyName,
+			platforms: platforms,
+			buildProducts: buildProducts,
+			rootDirectoryURL: rootDirectoryURL
+			)
+	}
+}
+
 /// Creates a version file for the current dependency in the
 /// Carthage/Build directory which associates its commitish with
 /// the hashes (e.g. SHA256) of the built frameworks for each platform
