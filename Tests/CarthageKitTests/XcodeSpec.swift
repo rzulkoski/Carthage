@@ -19,6 +19,9 @@ class XcodeSpec: QuickSpec {
 			isDirectory: true
 		)
 
+		let swiftToolchain_5_0 = "org.swift.5020190325a"
+		let swiftToolchain_5_1 = "org.swift.51020190919a"
+
 		beforeEach {
 			_ = try? FileManager.default.removeItem(at: buildFolderURL)
 			expect { try FileManager.default.createDirectory(atPath: targetFolderURL.path, withIntermediateDirectories: true) }.notTo(throwError())
@@ -100,30 +103,27 @@ class XcodeSpec: QuickSpec {
 			}
 
 			it("should determine when a module-stable Swift framework is incompatible") {
-				let localSwiftVersion = "5.0 (swiftlang-1001.0.69.5 clang-1001.0.46.3)"
-				let frameworkVersion = "5.1.2 (swiftlang-1100.0.278 clang-1100.0.33.9)"
 				let frameworkURL = Bundle(for: type(of: self)).url(forResource: "ModuleStableBuiltWithSwift5.1.2.framework", withExtension: nil)!
-				let result = isModuleStableAPI(localSwiftVersion, frameworkVersion, frameworkURL)
+				let result = checkSwiftFrameworkCompatibility(frameworkURL, usingToolchain: swiftToolchain_5_0).single()
 
-				expect(result).to(beFalse())
+				expect(result?.value).to(beNil())
+				expect(result?.error) == .incompatibleFrameworkSwiftVersions(local: "5.0 (swift-5.0-RELEASE)", framework: "5.1.2 (swiftlang-1100.0.278 clang-1100.0.33.9)")
 			}
 
 			it("should determine when a non-module-stable Swift framework is incompatible") {
-				let localSwiftVersion = "5.1 (swiftlang-1100.0.270.13 clang-1100.0.33.7)"
-				let frameworkVersion = "5.1.2 (swiftlang-1100.0.278 clang-1100.0.33.9)"
 				let frameworkURL = Bundle(for: type(of: self)).url(forResource: "NonModuleStableBuiltWithSwift5.1.2.framework", withExtension: nil)!
-				let result = isModuleStableAPI(localSwiftVersion, frameworkVersion, frameworkURL)
+				let result = checkSwiftFrameworkCompatibility(frameworkURL, usingToolchain: swiftToolchain_5_1).single()
 
-				expect(result).to(beFalse())
+				expect(result?.value).to(beNil())
+				expect(result?.error) == .incompatibleFrameworkSwiftVersions(local: "5.1 (swift-5.1-RELEASE)", framework: "5.1.2 (swiftlang-1100.0.278 clang-1100.0.33.9)")
 			}
 
 			it("should determine when a module-stable Swift framework is compatible") {
-				let localSwiftVersion = "5.1 (swiftlang-1100.0.270.13 clang-1100.0.33.7)"
-				let frameworkVersion = "5.1.2 (swiftlang-1100.0.278 clang-1100.0.33.9)"
 				let frameworkURL = Bundle(for: type(of: self)).url(forResource: "ModuleStableBuiltWithSwift5.1.2.framework", withExtension: nil)!
-				let result = isModuleStableAPI(localSwiftVersion, frameworkVersion, frameworkURL)
+				let result = checkSwiftFrameworkCompatibility(frameworkURL, usingToolchain: swiftToolchain_5_1).single()
 
-				expect(result).to(beTrue())
+				expect(result?.value) == frameworkURL
+				expect(result?.error).to(beNil())
 			}
 		}
 
@@ -375,7 +375,7 @@ class XcodeSpec: QuickSpec {
 			let versionFileURL = URL(fileURLWithPath: buildFolderURL.appendingPathComponent(".Archimedes.version").path)
 			let versionFile = VersionFile(url: versionFileURL)
 			expect(versionFile).notTo(beNil())
-			
+
 			// Verify that the other platform wasn't built.
 			let incorrectPath = buildFolderURL.appendingPathComponent("iOS/\(dependency.name).framework").path
 			expect(FileManager.default.fileExists(atPath: incorrectPath, isDirectory: nil)) == false
